@@ -2,9 +2,9 @@ import time
 from tronpy import Tron
 from tronpy.keys import PrivateKey
 from tronpy.exceptions import AddressNotFound
-from mysecrets import PRIVATE_KEY_HEX
+from my_secrets import PRIVATE_KEY_HEX
 from tronpy.providers import HTTPProvider
-from mysecrets import API_KEYS
+from my_secrets import API_KEYS
 
 # 1. Initialize Tron client
 client = Tron(provider=HTTPProvider(api_key=API_KEYS))
