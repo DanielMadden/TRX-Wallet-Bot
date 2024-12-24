@@ -1,18 +1,36 @@
 import time
 from tronpy import Tron
 from tronpy.keys import PrivateKey
-from secrets import PRIVATE_KEY_HEX  # Import the private key
+from mnemonic import Mnemonic
+from bip_utils import Bip44, Bip44Coins
+from secrets import MNEMONIC_PHRASE  # Import the mnemonic phrase from secrets.py
 
-# 1. Initialize the Tron client
+# Initialize the Tron client
 client = Tron()
 
-# 2. Replace the private key (in hex) and the target wallet address
-#    - "scammer_wallet_private_key" is the publicly-shared private key
-#    - "your_secure_wallet_address" is your destination address
-private_key = PrivateKey(bytes.fromhex(PRIVATE_KEY_HEX))
+# Function to derive private key from mnemonic
+def mnemonic_to_private_key(mnemonic_phrase: str) -> PrivateKey:
+    """
+    Convert a mnemonic phrase into a Tron private key.
+    """
+    # Create a seed from the mnemonic phrase
+    m = Mnemonic("english")
+    seed = m.to_seed(mnemonic_phrase)
+    
+    # Derive the private key using BIP-44 Tron path: m/44'/195'/0'/0/0
+    bip44_wallet = Bip44.FromSeed(seed, Bip44Coins.TRON)
+    bip44_account = bip44_wallet.Purpose().Coin().Account(0).Change(0).AddressIndex(0)
+    
+    # Return the private key
+    return PrivateKey(bip44_account.PrivateKey().Raw().ToBytes())
+
+# Derive private key from the mnemonic
+private_key = mnemonic_to_private_key(MNEMONIC_PHRASE)
+
+# Target wallet to withdraw funds
 target_wallet = "TGfJJ3o5e4eK9P8jZnFJSzJHUHGQeC2mpR"
 
-# 3. Minimum TRX balance required to cover fees for withdrawing USDT
+# Minimum TRX balance required to cover fees for withdrawing USDT
 required_trx = 15  # Adjust based on how much TRX is actually needed
 
 def get_balance(address: str) -> float:
@@ -25,7 +43,7 @@ def get_balance(address: str) -> float:
 
 def withdraw_usdt():
     """
-    Withdraw ALL USDT from the scammer’s wallet to your secure wallet.
+    Withdraw ALL USDT from the wallet to your secure wallet.
     """
     # Derive wallet address from the private key
     wallet_address = private_key.public_key.to_base58check_address()
