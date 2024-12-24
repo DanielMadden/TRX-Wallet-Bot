@@ -3,9 +3,11 @@ from tronpy import Tron
 from tronpy.keys import PrivateKey
 from tronpy.exceptions import AddressNotFound
 from mysecrets import PRIVATE_KEY_HEX
+from tronpy.providers import HTTPProvider
+from mysecrets import API_KEYS
 
 # 1. Initialize Tron client
-client = Tron()
+client = Tron(provider=HTTPProvider(api_key=API_KEYS))
 
 # 2. Construct the PrivateKey object from your hex string
 private_key = PrivateKey(bytes.fromhex(PRIVATE_KEY_HEX))
@@ -76,7 +78,7 @@ def monitor_wallet():
         except Exception as e:
             print(f"Unexpected error: {e}")
 
-        # Poll every 5 seconds
+        # Poll every 15 seconds (adjust to avoid daily limits)
         time.sleep(15)
 
 if __name__ == "__main__":
