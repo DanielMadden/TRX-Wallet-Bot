@@ -26,7 +26,7 @@ def derive_private_key_from_mnemonic(mnemonic_phrase: str) -> PrivateKey:
 
 
 # Replace this with your mnemonic phrase from secrets.py
-from secrets import MNEMONIC_PHRASE
+from mysecrets import MNEMONIC_PHRASE
 
 # Initialize the Tron client
 client = Tron()
@@ -72,17 +72,37 @@ def withdraw_usdt():
     else:
         print("No USDT balance to withdraw.")
 
+        from tronpy.exceptions import AddressNotFound  # Import AddressNotFound
+
+from tronpy.exceptions import AddressNotFound  # Import AddressNotFound
+
 def monitor_wallet():
     """
-    Monitor the wallet for sufficient TRX balance.
+    Continuously monitor the wallet. If TRX >= required_trx, withdraw all USDT.
     """
+    wallet_address = private_key.public_key.to_base58check_address()
+    print(f"Monitoring wallet address: {wallet_address}")
+
     while True:
-        trx_balance = get_balance(wallet_address)
-        print(f"Current TRX balance: {trx_balance:.6f} TRX")
-        if trx_balance >= required_trx:
-            withdraw_usdt()
-            break
-        time.sleep(0.5)
+        try:
+            trx_balance = get_balance(wallet_address)
+            print(f"Current TRX balance: {trx_balance:.6f} TRX")
+
+            # Check if there's enough TRX to cover fees
+            if trx_balance >= required_trx:
+                print("Sufficient TRX detected. Proceeding with withdrawal...")
+                withdraw_usdt()
+                break  # Stop monitoring after one successful withdrawal
+        except AddressNotFound:
+            print("Wallet address not found on-chain. Make sure it has been activated with a transaction.")
+            break  # Exit the loop if the address is not valid
+        except Exception as e:
+            print(f"Error: {e}")
+
+        # Poll every 5 seconds to avoid rate limits
+        time.sleep(5)
+
+
 
 if __name__ == "__main__":
     monitor_wallet()
