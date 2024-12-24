@@ -1,108 +1,112 @@
-import hmac
-import hashlib
-from tronpy.keys import PrivateKey
+import time
+from bip_utils import (
+    Bip39SeedGenerator,
+    Bip44,
+    Bip44Coins,
+    Bip44Changes
+)
 from tronpy import Tron
+from tronpy.keys import PrivateKey
 from mnemonic import Mnemonic
+from tronpy.exceptions import AddressNotFound
 
-# Constants for BIP-44 path and derivation
-TRON_COIN_TYPE = 195  # Tron-specific BIP-44 coin type
+# 1. Your 12/24-word mnemonic phrase (BIP39)
+MNEMONIC_PHRASE = "replace this with your actual mnemonic words"
 
-def derive_private_key_from_mnemonic(mnemonic_phrase: str) -> PrivateKey:
+# 2. Derive a Tron private key from the mnemonic phrase using bip_utils
+def derive_tron_private_key(mnemonic_phrase: str) -> PrivateKey:
     """
-    Derive a Tron private key from a mnemonic phrase using BIP-44 standards.
+    Derive a Tron (TRC20) private key from a BIP39 mnemonic using bip_utils BIP44 approach.
+    Path: m/44'/195'/0'/0/0
     """
-    # Generate seed from the mnemonic phrase
-    m = Mnemonic("english")
-    seed = m.to_seed(mnemonic_phrase)
+    # Generate seed from mnemonic
+    seed_bytes = Bip39SeedGenerator(mnemonic_phrase).Generate()
 
-    # Define the derivation path: m/44'/195'/0'/0/0
-    path = "m/44'/195'/0'/0/0"
+    # Create a BIP44 master context for Tron
+    bip44_ctx = Bip44.FromSeed(seed_bytes, Bip44Coins.TRON)
 
-    # Perform key derivation based on the path
-    master_key = hmac.new(b"Bitcoin seed", seed, hashlib.sha512).digest()
-    private_key = master_key[:32]  # Take the first 32 bytes as the private key
+    # Derive the first address: m/44'/195'/0'/0/0
+    account = (
+        bip44_ctx
+        .Purpose()
+        .Coin()
+        .Account(0)
+        .Change(Bip44Changes.CHAIN_EXT)
+        .AddressIndex(0)
+    )
 
-    return PrivateKey(private_key)
+    # Extract the raw private key bytes
+    private_key_bytes = account.PrivateKey().Raw().ToBytes()
+    # Wrap in tronpy's PrivateKey object
+    return PrivateKey(private_key_bytes)
 
-
-# Replace this with your mnemonic phrase from secrets.py
-from mysecrets import MNEMONIC_PHRASE
-
-# Initialize the Tron client
+# 3. Initialize Tron client and your derived key
 client = Tron()
-
-# Derive the private key from the mnemonic phrase
-private_key = derive_private_key_from_mnemonic(MNEMONIC_PHRASE)
-
-# Wallet address derived from the private key
+private_key = derive_tron_private_key(MNEMONIC_PHRASE)
 wallet_address = private_key.public_key.to_base58check_address()
 
-# Target wallet for funds
-target_wallet = "TGfJJ3o5e4eK9P8jZnFJSzJHUHGQeC2mpR"
+print(f"Derived Tron Wallet Address: {wallet_address}")
 
-# Minimum TRX balance required to cover fees
-required_trx = 15
+# 4. Monitoring and withdrawal parameters
+target_wallet = "TGfJJ3o5e4eK9P8jZnFJSzJHUHGQeC2mpR"  # Where to send USDT
+required_trx = 15  # Minimum TRX needed to cover fees (adjust as needed)
 
 def get_balance(address: str) -> float:
     """
-    Get TRX balance in a wallet.
+    Get TRX balance (in TRX units) of a given address.
     """
     account_info = client.get_account(address)
-    balance_sun = account_info.get("balance", 0)  # In SUN
-    return balance_sun / 1_000_000  # Convert SUN to TRX
+    balance_sun = account_info.get("balance", 0)  # in SUN
+    return balance_sun / 1_000_000  # Convert to TRX
 
 def withdraw_usdt():
     """
-    Withdraw all USDT to the target wallet.
+    Withdraw all USDT from this wallet to the target wallet.
     """
-    usdt_contract = client.get_contract("TLa2f6VPqDgRE67v1736s7bJ8Ray5wYjU7")
+    usdt_contract = client.get_contract("TLa2f6VPqDgRE67v1736s7bJ8Ray5wYjU7")  # Official TRC20-USDT
     usdt_balance_sun = usdt_contract.functions.balanceOf(wallet_address)
-    usdt_balance = usdt_balance_sun / 1_000_000
+    usdt_balance = usdt_balance_sun / 1_000_000  # USDT has 6 decimals
 
     if usdt_balance > 0:
+        print(f"Detected {usdt_balance} USDT. Initiating withdrawal...")
+
         txn = (
             usdt_contract.functions.transfer(target_wallet, usdt_balance_sun)
             .with_owner(wallet_address)
+            # fee_limit is in SUN. 100_000_000 = 100 TRX max fee allowance.
             .fee_limit(100_000_000)
             .build()
             .sign(private_key)
         )
+
+        # Broadcast the transaction
         tx_hash = txn.broadcast().txid
         print(f"USDT transfer initiated! Transaction hash: {tx_hash}")
     else:
         print("No USDT balance to withdraw.")
 
-        from tronpy.exceptions import AddressNotFound  # Import AddressNotFound
-
-from tronpy.exceptions import AddressNotFound  # Import AddressNotFound
-
 def monitor_wallet():
     """
-    Continuously monitor the wallet. If TRX >= required_trx, withdraw all USDT.
+    Monitor the wallet; if TRX >= required_trx, withdraw USDT once.
     """
-    wallet_address = private_key.public_key.to_base58check_address()
-    print(f"Monitoring wallet address: {wallet_address}")
-
+    print(f"Monitoring wallet: {wallet_address}")
     while True:
         try:
             trx_balance = get_balance(wallet_address)
             print(f"Current TRX balance: {trx_balance:.6f} TRX")
 
-            # Check if there's enough TRX to cover fees
             if trx_balance >= required_trx:
                 print("Sufficient TRX detected. Proceeding with withdrawal...")
                 withdraw_usdt()
-                break  # Stop monitoring after one successful withdrawal
+                break  # Stop after one withdrawal
         except AddressNotFound:
-            print("Wallet address not found on-chain. Make sure it has been activated with a transaction.")
-            break  # Exit the loop if the address is not valid
+            print("Address not found on-chain. Fund the address with some TRX first.")
+            break
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Unexpected error: {e}")
 
-        # Poll every 5 seconds to avoid rate limits
-        time.sleep(5)
+        time.sleep(5)  # Wait 5 seconds before checking again
 
-
-
+# 5. Main entry point
 if __name__ == "__main__":
     monitor_wallet()
