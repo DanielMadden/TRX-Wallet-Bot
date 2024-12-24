@@ -34,10 +34,10 @@ def withdraw_usdt():
     Withdraw ALL USDT from the current wallet to the target wallet.
     """
     # Official Tether USDT TRC20 contract on Tron
-    usdt_contract = client.get_contract("TLa2f6VPqDgRE67v1736s7bJ8Ray5wYjU7")
+    usdt_contract = client.get_contract("TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t")
 
     # Get USDT balance in SUN (contract uses 6 decimal places)
-    usdt_balance_sun = usdt_contract.functions.balanceOf(wallet_address)
+    usdt_balance_sun = usdt_contract.functions.balanceOf(wallet_address).call()
     usdt_balance = usdt_balance_sun / 1_000_000
 
     if usdt_balance > 0:
@@ -56,6 +56,7 @@ def withdraw_usdt():
         print(f"USDT transfer initiated! Transaction hash: {tx_hash}")
     else:
         print("No USDT balance to withdraw.")
+
 
 def monitor_wallet():
     """
