@@ -72,7 +72,7 @@ def monitor_wallet():
             if trx_balance >= required_trx:
                 print("Sufficient TRX detected. Proceeding with withdrawal...")
                 withdraw_usdt()
-                break  # stop after one successful withdrawal
+                # break  # stop after one successful withdrawal
         except AddressNotFound:
             print("Wallet address not found on-chain. Fund it with some TRX first.")
             break
